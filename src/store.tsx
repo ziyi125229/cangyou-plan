@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react';
-import { INFO_PRESETS, INITIAL_COLLECTION } from './data/collection';
+import { EXTERNAL_PRESETS, INFO_PRESETS, INITIAL_COLLECTION } from './data/collection';
 import { applyOption, undoLast } from './logic/impact';
 import { generatePlan, type PlanParams } from './logic/planner';
+import { commentOrigin, originLabel } from './logic/source';
 import type { Collection, CollectionItem, Draft, Overlay, Plan, View } from './types';
 
 export interface Toast {
@@ -52,6 +53,7 @@ export type Action =
   | { type: 'toggleTodo'; id: string }
   | { type: 'confirmActivity'; id: string }
   | { type: 'collect'; presetId?: string; text?: string; fromNoteId?: string; at: string; goImpact?: boolean }
+  | { type: 'collectExternal'; presetId: string; at: string }
   | { type: 'draft'; draft: Partial<Draft> }
   | { type: 'analyzed' }
   | { type: 'apply'; at: string }
@@ -148,6 +150,7 @@ export function reducer(s: State, a: Action): State {
         entities: {},
         cover: { tone: '#7a7f8c', label: '评论补充' },
         fromNoteId: fromId,
+        commentSource: from ? 'collected_note' : undefined,
         impact: s.plan ? 'unchecked' : 'none',
         isNew: true,
         savedAt: '刚刚',
@@ -159,6 +162,37 @@ export function reducer(s: State, a: Action): State {
       const view: View = a.goImpact && s.plan ? { name: 'impact', itemId: id } : s.view;
       return withToast({ ...s, collection, overlay: null, peek: null, view }, `已收藏到「${s.collection.name}」`);
     }
+    case 'collectExternal': {
+      const preset = EXTERNAL_PRESETS.find((p) => p.id === a.presetId);
+      if (!preset) return s;
+      const id = `c-${preset.id}`;
+      if (s.collection.items.some((i) => i.id === id)) return withToast(s, '这条评论已在收藏夹中', 'info');
+      const item: CollectionItem = {
+        id,
+        title: `评论补充：${preset.text.length > 18 ? preset.text.slice(0, 18) + '…' : preset.text}`,
+        type: 'comment',
+        category: '评论补充',
+        summary: `来自帖子「${preset.post.title.slice(0, 14)}…」的评论区（单独收藏的评论）`,
+        body: [preset.text],
+        author: `评论 · ${preset.author}`,
+        likes: String(preset.likes),
+        places: [],
+        timeInfo: preset.time,
+        inPlan: false,
+        entities: {},
+        cover: { tone: '#7a7f8c', label: '评论补充' },
+        commentSource: 'external_post',
+        sourcePost: { ...preset.post },
+        impact: s.plan ? 'unchecked' : 'none',
+        isNew: true,
+        savedAt: '刚刚',
+      };
+      const collection = {
+        ...s.collection,
+        items: [item, ...s.collection.items.map((i) => ({ ...i, isNew: false }))],
+      };
+      return withToast({ ...s, collection }, `已收藏到${s.collection.name}`);
+    }
     case 'draft': {
       const base: Draft = s.draft ?? { itemId: '', analyzed: false, option: null, altId: null, activityId: null };
       return { ...s, draft: { ...base, ...a.draft } };
@@ -169,8 +203,8 @@ export function reducer(s: State, a: Action): State {
       const d = s.draft;
       const item = s.collection.items.find((i) => i.id === d?.itemId);
       if (!s.plan || !d || !item || !d.option || !d.activityId) return s;
-      const sourceTitle = s.collection.items.find((i) => i.id === item.fromNoteId)?.title;
-      const { plan, record } = applyOption({ plan: s.plan, item, sourceTitle, activityId: d.activityId, option: d.option, altId: d.altId, at: a.at });
+      const sourceLabel = originLabel(commentOrigin(item, s.collection.items));
+      const { plan, record } = applyOption({ plan: s.plan, item, sourceLabel, activityId: d.activityId, option: d.option, altId: d.altId, at: a.at });
       const collection = setItem(s.collection, item.id, { impact: 'applied', inPlan: true });
       return withToast(
         { ...s, plan, collection, draft: null, view: { name: 'plan', day: record.day } },

@@ -33,7 +33,7 @@ export function DayPinView({
   adjacentIds,
   mark,
   comment,
-  noteTitle,
+  sourceLabel,
 }: {
   day: DayPlan;
   dateLabel: string;
@@ -41,7 +41,7 @@ export function DayPinView({
   adjacentIds: string[];
   mark: Mark;
   comment: string;
-  noteTitle?: string;
+  sourceLabel?: string;
 }) {
   return (
     <div className="pin-day">
@@ -70,7 +70,7 @@ export function DayPinView({
                 <MessageCircle size={12} />
                 <div>
                   <p>{comment}</p>
-                  {noteTitle && <small>来自收藏笔记《{noteTitle}》的评论区</small>}
+                  {sourceLabel && <small>{sourceLabel}</small>}
                 </div>
               </div>
             )}

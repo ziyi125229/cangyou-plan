@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeImpact } from '../logic/impact';
 import { DEFAULT_PARAMS, validatePlan } from '../logic/planner';
+import { commentOrigin, contextNote } from '../logic/source';
 import { initialState, migrate, reducer, type Action, type State } from '../store';
 
 const run = (s: State, ...actions: Action[]) => actions.reduce(reducer, s);
@@ -56,6 +57,88 @@ describe('确认更新与撤销', () => {
     const stay = s.plan!.dayPlans.flatMap((d) => d.activities).find((a) => a.id === 'lijiang-stay')!;
     expect(stay.title).toContain('共 2 晚');
     expect(stay.title).toContain('避开酒吧街');
+  });
+});
+
+describe('单独收藏其他帖子下的评论', () => {
+  const ext = (id: string, s = run(initialState(), gen(5))) => run(s, { type: 'collectExternal', presetId: id, at });
+  const item = (s: State, id: string) => s.collection.items.find((i) => i.id === `c-${id}`)!;
+
+  it('保存评论正文、原帖信息与来源类型，不挂到任何收藏笔记上', () => {
+    const s = ext('ext-afish');
+    const c = item(s, 'ext-afish');
+    expect(c.commentSource).toBe('external_post');
+    expect(c.sourcePost?.title).toBe('大理古城吃了 5 天，这几家我愿意再去');
+    expect(c.sourcePost?.author).toBe('吃遍云南的阿宁');
+    expect(c.body[0]).toContain('阿鹏酸辣鱼古城店');
+    expect(c.fromNoteId).toBeUndefined();
+    expect(s.collection.items.some((i) => i.id === c.sourcePost?.id)).toBe(false);
+    expect(commentOrigin(c, s.collection.items).kind).toBe('external_post');
+    expect(contextNote(c, s.collection.items)).toBeUndefined();
+    expect(c.impact).toBe('unchecked');
+    expect(s.view).toEqual(run(initialState(), gen(5)).view);
+    expect(s.toast?.text).toBe('已收藏到云南旅行');
+  });
+
+  it('重复收藏不会新增', () => {
+    const once = ext('ext-afish');
+    const twice = ext('ext-afish', once);
+    expect(twice.collection.items).toHaveLength(once.collection.items.length);
+  });
+
+  it('没有计划时收藏，状态为无需检查', () => {
+    const s = run(initialState(), { type: 'collectExternal', presetId: 'ext-cable', at });
+    expect(item(s, 'ext-cable').impact).toBe('none');
+  });
+
+  it('点名店铺的评论无需指代也能定位到行程', () => {
+    const s = ext('ext-afish');
+    const c = item(s, 'ext-afish');
+    const r = analyzeImpact(c.body[0], s.plan, contextNote(c, s.collection.items));
+    expect(r.kind).toBe('matched');
+    expect(r.activity?.id).toBe('arrive-dinner');
+    expect(r.resolved).toBeUndefined();
+  });
+
+  it('景点暂停开放的评论比对行程日期', () => {
+    const s = ext('ext-cable');
+    const c = item(s, 'ext-cable');
+    const r = analyzeImpact(c.body[0], s.plan, contextNote(c, s.collection.items));
+    expect(r.activity?.id).toBe('cangshan-cable');
+    expect(r.timing?.within).toBe(true);
+  });
+
+  it('「这家店」没有来源笔记时不做指代解析，也不伪造定位', () => {
+    const s = ext('ext-vague');
+    const c = item(s, 'ext-vague');
+    const r = analyzeImpact(c.body[0], s.plan, contextNote(c, s.collection.items));
+    expect(r.resolved).toBeUndefined();
+    expect(r.activity).toBeUndefined();
+    expect(r.kind).toBe('ambiguous');
+  });
+
+  it('应用、变更原因与撤销', () => {
+    let s = ext('ext-afish');
+    const before = s.plan!.dayPlans;
+    s = run(s, { type: 'draft', draft: { itemId: 'c-ext-afish', activityId: 'arrive-dinner', option: 'replace', altId: 'erhai-home', analyzed: true } });
+    s = run(s, { type: 'apply', at });
+    expect(s.plan!.changes[0].reason).toContain('帖子「大理古城吃了 5 天，这几家我愿意再去」下单独收藏的评论');
+    expect(s.plan!.changes[0].reason).not.toContain('收藏笔记');
+    s = run(s, { type: 'undo', at });
+    expect(s.plan!.dayPlans).toEqual(before);
+  });
+
+  it('旧数据（无 commentSource）按 fromNoteId 识别为收藏笔记评论', () => {
+    const s = run(initialState(), { type: 'collect', presetId: 'preset-shop', at });
+    const c = { ...s.collection.items.find((i) => i.id === 'c-preset-shop')!, commentSource: undefined };
+    expect(commentOrigin(c, s.collection.items).kind).toBe('collected_note');
+  });
+
+  it('重新生成后单独收藏的评论保留', () => {
+    const s = run(ext('ext-cable'), gen(6));
+    const c = item(s, 'ext-cable');
+    expect(c.commentSource).toBe('external_post');
+    expect(c.impact).toBe('unchecked');
   });
 });
 

@@ -1,4 +1,4 @@
-import type { Collection, CollectionItem } from '../types';
+import type { Collection, CollectionItem, SourcePost } from '../types';
 
 /**
  * 演示用模拟数据：内容、作者与点赞数均为虚构，不来自小红书真实数据。
@@ -339,6 +339,47 @@ export const INFO_PRESETS: InfoPreset[] = [
     likes: 47,
     time: '4 天前',
     hint: '补充建议 · 可写进丽江订房要求',
+  },
+];
+
+export interface ExternalPreset {
+  id: string;
+  text: string;
+  author: string;
+  likes: number;
+  time: string;
+  hint: string;
+  post: SourcePost;
+}
+
+/** 刷笔记时在其他帖子（未收藏）下看到的评论（均为虚构，用于演示） */
+export const EXTERNAL_PRESETS: ExternalPreset[] = [
+  {
+    id: 'ext-afish',
+    text: '阿鹏酸辣鱼古城店最近关门装修了，门口贴着12月中旬才重新营业。',
+    author: '大理土著小周',
+    likes: 96,
+    time: '1 天前',
+    hint: '评论直接点名店铺 · 可定位到具体行程',
+    post: { id: 'post-dali-eat', title: '大理古城吃了 5 天，这几家我愿意再去', author: '吃遍云南的阿宁', cover: { tone: '#c8663a', label: '大理吃什么' } },
+  },
+  {
+    id: 'ext-cable',
+    text: '苍山洗马潭索道最近暂停开放检修，要到11月底才恢复，这段时间去的别白跑。',
+    author: '徒步的老陈',
+    likes: 154,
+    time: '3 天前',
+    hint: '景点暂停开放 · 比对行程日期',
+    post: { id: 'post-cangshan', title: '苍山徒步路线合集｜小白也能走', author: '山野笔记本', cover: { tone: '#5b6fa8', label: '苍山徒步' } },
+  },
+  {
+    id: 'ext-vague',
+    text: '这家店最近在装修，别白跑一趟。',
+    author: '路过的游客',
+    likes: 12,
+    time: '5 小时前',
+    hint: '没有可靠来源笔记 · 无法判断「这家店」指哪里',
+    post: { id: 'post-yunnan-vlog', title: '云南 7 天 vlog｜随手拍的一些小店', author: '慢慢走的 Lu', cover: { tone: '#8c6a4f', label: '云南 vlog' } },
   },
 ];
 

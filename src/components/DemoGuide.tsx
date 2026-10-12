@@ -26,9 +26,34 @@ export function DemoGuide() {
           <p>让收藏变成行动</p>
         </div>
       </div>
-      <p className="guide-intro">
-        小红书站内 AI 助手的场景化能力升级概念 Demo：以收藏夹作为任务上下文，生成可执行计划；当收藏笔记的评论区出现新情况（如店铺装修、景点关闭）时，定位受影响的行程并在你确认后更新。
-      </p>
+      <section className="pitch">
+        <p className="pitch-kicker">小红书站内 AI 助手 · 场景化能力升级概念 Demo</p>
+        <div className="pitch-row">
+          <i>1</i>
+          <p>
+            以<b>收藏夹</b>作为任务上下文，
+            <br />
+            生成<mark>可执行的旅行计划</mark>
+          </p>
+        </div>
+        <div className="pitch-row">
+          <i>2</i>
+          <div>
+            <p>
+              收藏夹里出现<b>新情况</b>时，
+              <br />
+              <mark>定位受影响的行程</mark>，<b>你确认后</b>才更新
+            </p>
+            <div className="pitch-src">
+              <span>新情况，如店铺装修、景点关闭，可以来自：</span>
+              <ul>
+                <li>已收藏笔记评论区的新评论</li>
+                <li>在其他帖子下看到、单独收藏的相关评论</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
       <h2>演示路径</h2>
       <ol className="guide-steps">
         {steps.map((s, i) => (

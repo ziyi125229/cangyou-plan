@@ -16,7 +16,7 @@ export function ChangeLogPage() {
         {plan.changes.length === 0 ? (
           <div className="empty">
             <History size={28} />
-            <p>还没有变更。从收藏笔记的评论区加入新评论并确认更新后，修改原因和前后差异会记录在这里。</p>
+            <p>还没有变更。把相关评论收藏进收藏夹并确认更新后，修改原因和前后差异会记录在这里。</p>
           </div>
         ) : (
           <ol className="log">

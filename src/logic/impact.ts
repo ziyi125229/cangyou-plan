@@ -224,7 +224,8 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 export interface ApplyInput {
   plan: Plan;
   item: CollectionItem;
-  sourceTitle?: string;
+  /** 评论来源描述，如「收藏笔记「…」的评论区」 */
+  sourceLabel?: string;
   activityId: string;
   option: OptionId;
   altId?: string | null;
@@ -232,7 +233,7 @@ export interface ApplyInput {
 }
 
 /** 生成更新后的计划（纯函数，可用于预览，也用于确认后提交） */
-export function applyOption({ plan, item, sourceTitle, activityId, option, altId, at }: ApplyInput): { plan: Plan; record: ChangeRecord } {
+export function applyOption({ plan, item, sourceLabel, activityId, option, altId, at }: ApplyInput): { plan: Plan; record: ChangeRecord } {
   const next = clone(plan);
   const snapshot = clone({ dayPlans: plan.dayPlans, todos: plan.todos, version: plan.version });
   const day = next.dayPlans.find((d) => d.activities.some((a) => a.id === activityId))!;
@@ -327,7 +328,7 @@ export function applyOption({ plan, item, sourceTitle, activityId, option, altId
     id: `chg-${at}`,
     at,
     title,
-    reason: `${sourceTitle ? `收藏笔记「${sourceTitle}」的评论区提到` : '收藏的评论提到'}：「${comment}」`,
+    reason: `${sourceLabel ? `${sourceLabel}提到` : '收藏的评论提到'}：「${comment}」`,
     sourceItemId: item.id,
     sourceText: comment,
     option,

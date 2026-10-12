@@ -22,6 +22,16 @@ export interface NoteComment {
   presetId?: string;
 }
 
+/** collected_note：已收藏笔记的评论区；external_post：在其他帖子下单独收藏的评论 */
+export type CommentSource = 'collected_note' | 'external_post';
+
+export interface SourcePost {
+  id: string;
+  title: string;
+  author?: string;
+  cover?: { tone: string; label: string };
+}
+
 export interface CollectionItem {
   id: string;
   title: string;
@@ -39,8 +49,12 @@ export interface CollectionItem {
   comments?: NoteComment[];
   /** 笔记主要讲的对象，用于解析评论里的「这家店」等指代 */
   subject?: string;
-  /** 评论补充：来源笔记 */
+  /** 评论补充：来源笔记（仅 commentSource 为 collected_note 时） */
   fromNoteId?: string;
+  /** 评论补充的来源类型；旧数据缺省时按 fromNoteId 推断 */
+  commentSource?: CommentSource;
+  /** 单独收藏的评论所在的原帖（该帖不在收藏夹中） */
+  sourcePost?: SourcePost;
   impact: ImpactState;
   isNew?: boolean;
   savedAt: string;
@@ -151,7 +165,7 @@ export type View =
 export type Overlay =
   | { kind: 'ai' }
   | { kind: 'item'; id: string }
-  | { kind: 'addInfo' }
+  | { kind: 'addInfo'; tab?: 'notes' | 'external' }
   | null;
 
 export interface Draft {

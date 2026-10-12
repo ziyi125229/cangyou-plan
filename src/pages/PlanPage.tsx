@@ -1,22 +1,41 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
+  ArrowRight,
   ChevronDown,
   ChevronUp,
-  CircleAlert,
   CircleCheck,
   FileText,
   History,
   Lightbulb,
+  MapPin,
   MessageCircle,
   MessageSquarePlus,
   Square,
   SquareCheck,
   Undo2,
 } from 'lucide-react';
-import { KIND_ICON, MockNote, SourceChips, StatusBadge, TopBar } from '../components/ui';
+import { KIND_ICON, MockNote, Scene, SourceChips, StatusBadge, TopBar, type Motif } from '../components/ui';
 import { budgetBreakdown, dayCost, dayDate, fmtDate, planStats } from '../logic/planner';
 import { nowStamp, useStore } from '../store';
-import type { Activity } from '../types';
+import type { Activity, DayPlan } from '../types';
+
+const PERIODS = [
+  { label: '上午', test: (t: string) => t < '12:00' },
+  { label: '下午', test: (t: string) => t >= '12:00' && t < '18:00' },
+  { label: '晚上', test: (t: string) => t >= '18:00' },
+];
+
+const DAY_SCENE: Record<string, { motif: Motif; tone: string }> = {
+  'day-arrive': { motif: 'town', tone: '#b0805a' },
+  'day-erhai': { motif: 'lake', tone: '#3b7dd8' },
+  'day-cangshan': { motif: 'lake', tone: '#5b6fa8' },
+  'day-lijiang': { motif: 'sunset', tone: '#c0607e' },
+  'day-snow': { motif: 'snow', tone: '#5f8fc4' },
+  'day-return': { motif: 'lake', tone: '#6b8f4e' },
+};
+
+const cityOf = (d: DayPlan) =>
+  d.activities.some((a) => a.id.startsWith('lijiang-stay')) || d.activities.some((a) => a.id === 'return-back') ? '丽江' : '大理';
 
 function ActivityRow({ a, open }: { a: Activity; open: boolean }) {
   const { dispatch } = useStore();
@@ -24,14 +43,20 @@ function ActivityRow({ a, open }: { a: Activity; open: boolean }) {
   return (
     <li className={`act act-${a.status}${a.changed ? ' act-changed' : ''}`}>
       <span className="act-time">{a.time}</span>
-      <span className="act-dot">
+      <span className={`act-dot kind-${a.kind}`}>
         <Icon size={13} />
       </span>
       <div className="act-main">
         <div className="act-title">
           <b>{a.title}</b>
-          <StatusBadge status={a.status} small />
+        </div>
+        <div className="act-sub">
+          <span>
+            {a.place}
+            {a.cost > 0 && ` · 人均 ¥${a.cost}`}
+          </span>
           {a.changed && <span className="badge badge-changed badge-sm">已变更</span>}
+          <StatusBadge status={a.status} small />
         </div>
         {a.changeNote && <p className="act-change">{a.changeNote}</p>}
         {a.changeSource && (
@@ -45,9 +70,6 @@ function ActivityRow({ a, open }: { a: Activity; open: boolean }) {
         {open && (
           <div className="act-more">
             {a.detail && <p>{a.detail}</p>}
-            <p className="muted tiny">
-              {a.place} · 人均约 ¥{a.cost}
-            </p>
             <SourceChips ids={a.sourceIds} />
             {a.status !== 'confirmed' && (
               <button className="btn btn-sm btn-outline" onClick={() => dispatch({ type: 'confirmActivity', id: a.id })}>
@@ -66,6 +88,9 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
   const { plan, collection } = state;
   const [day, setDay] = useState(initialDay ?? 1);
   const [open, setOpen] = useState(false);
+  const [showBudget, setShowBudget] = useState(false);
+  const todoRef = useRef<HTMLElement>(null);
+  const followRef = useRef<HTMLElement>(null);
   if (!plan) return null;
 
   const stats = planStats(plan);
@@ -74,6 +99,9 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
   const unchecked = collection.items.filter((i) => i.impact === 'unchecked');
   const lastChange = plan.changes.find((c) => !c.undone);
   const followUps = plan.dayPlans.flatMap((d) => d.activities.filter((a) => a.status !== 'confirmed').map((a) => ({ d, a })));
+  const nights = (city: string) => plan.dayPlans.filter((d) => d.activities.some((a) => a.id.startsWith(`${city}-stay`))).length;
+  const todoDone = plan.todos.filter((t) => t.done).length;
+  const scene = DAY_SCENE[current.id] ?? { motif: 'town' as const, tone: '#8c6a4f' };
 
   const checkNew = () =>
     unchecked.length
@@ -95,15 +123,20 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
       />
       <div className="scroll">
         <section className="plan-head">
-          <div className="plan-meta">
-            <span>{fmtDate(dayDate(plan, 1))} 出发</span>
-            <span>{plan.days} 天</span>
-            <span>人均 ¥{plan.budget}</span>
-            <span>{plan.people} 人</span>
+          <div className="plan-route">
+            <b>
+              {fmtDate(dayDate(plan, 1))} – {fmtDate(dayDate(plan, plan.days))}
+            </b>
+            <span>
+              {plan.days} 天 {plan.days - 1} 晚 · {plan.people} 人
+            </span>
             <span className={`ver ver-${plan.version > 1 ? 'up' : 'gen'}`}>
               {plan.version > 1 ? `已更新 · v${plan.version}` : '已生成 · v1'}
             </span>
           </div>
+          <p className="plan-cities">
+            <MapPin size={13} /> 大理 {nights('dali')} 晚 <ArrowRight size={12} /> 丽江 {nights('lijiang')} 晚 · 单向不走回头路
+          </p>
           <p className="muted tiny">
             生成于 {plan.createdAt}
             {plan.updatedAt !== plan.createdAt && ` · 最近更新 ${plan.updatedAt}`}
@@ -126,28 +159,44 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
 
         {unchecked.length > 0 && (
           <button className="alert-banner" onClick={checkNew}>
-            <CircleAlert size={16} />
+            <MessageCircle size={16} />
             <span>
-              收藏夹新增 {unchecked.length} 条信息<b>可能影响已有计划，待核实</b>
+              收藏夹新增 {unchecked.length} 条评论信息<b>可能影响已有计划，待核实</b>
             </span>
             <em>检查影响</em>
           </button>
         )}
 
-        <section className="card overview">
-          <div className="ov-budget">
-            <div className="ov-budget-head">
+        <section className="card summary">
+          <div className="sum-row">
+            <button className="sum-cell" onClick={() => setShowBudget(!showBudget)}>
               <span>人均预算</span>
               <b>¥{plan.budget}</b>
               <small className={budget.reserve < 0 ? 'neg' : ''}>
-                已安排 ¥{budget.used} · {budget.reserve >= 0 ? `机动 ¥${budget.reserve}` : `超出 ¥${-budget.reserve}`}
+                {budget.reserve >= 0 ? `机动 ¥${budget.reserve}` : `超出 ¥${-budget.reserve}`}
+                {showBudget ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               </small>
-            </div>
-            <div className="bar">
-              {budget.lines.map((l, i) => (
-                <span key={l.label} className={`bar-seg seg-${i}`} style={{ width: `${(l.amount / Math.max(plan.budget, budget.used)) * 100}%` }} />
-              ))}
-            </div>
+            </button>
+            <button className="sum-cell" onClick={() => todoRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+              <span>待办</span>
+              <b>
+                {todoDone}
+                <i>/{plan.todos.length}</i>
+              </b>
+              <small>出发前完成</small>
+            </button>
+            <button className="sum-cell" onClick={() => followRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+              <span>待确认</span>
+              <b className={stats.pending + stats.risk ? 'pend' : ''}>{stats.pending + stats.risk}</b>
+              <small>已确认 {stats.confirmed} 项</small>
+            </button>
+          </div>
+          <div className="bar">
+            {budget.lines.map((l, i) => (
+              <span key={l.label} className={`bar-seg seg-${i}`} style={{ width: `${(l.amount / Math.max(plan.budget, budget.used)) * 100}%` }} />
+            ))}
+          </div>
+          {showBudget && (
             <div className="bar-legend">
               {budget.lines.map((l, i) => (
                 <span key={l.label}>
@@ -155,55 +204,59 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
                   {l.label} ¥{l.amount}
                 </span>
               ))}
+              <span>已安排 ¥{budget.used}</span>
             </div>
-          </div>
-          <div className="ov-stats">
-            <div className="stat stat-confirmed">
-              <b>{stats.confirmed}</b>
-              <span>已确认</span>
-            </div>
-            <div className="stat stat-pending">
-              <b>{stats.pending}</b>
-              <span>待确认</span>
-            </div>
-            <div className="stat stat-risk">
-              <b>{stats.risk + unchecked.length}</b>
-              <span>风险提示</span>
-            </div>
-          </div>
-          <p className="muted tiny">预算按人均估算，不含往返大交通；价格为演示数据。</p>
+          )}
+          <p className="muted tiny">按人均估算，不含往返大交通；价格为演示数据。</p>
         </section>
 
         <div className="day-tabs" role="tablist">
           {plan.dayPlans.map((d) => (
             <button key={d.id} role="tab" className={`day-tab${d.day === current.day ? ' on' : ''}`} onClick={() => setDay(d.day)}>
               Day {d.day}
-              <small>{fmtDate(dayDate(plan, d.day))}</small>
+              <small>
+                {fmtDate(dayDate(plan, d.day))} · {cityOf(d)}
+              </small>
               {d.changeTag && <i className="tab-dot" />}
             </button>
           ))}
         </div>
 
         <section className={`card day-card${current.changeTag ? ' day-card-changed' : ''}`}>
-          <div className="day-head">
-            <div>
-              <h3>
-                Day {current.day} · {current.title}
-                {current.changeTag && <span className="badge badge-changed badge-sm">{current.changeTag}</span>}
-              </h3>
-              <p className="muted">
-                {fmtDate(dayDate(plan, current.day), true)} · {current.area} · {current.summary}
-              </p>
+          <div className="day-hero">
+            <Scene motif={scene.motif} tone={scene.tone} />
+            <div className="day-hero-text">
+              <span>
+                Day {current.day} · {fmtDate(dayDate(plan, current.day), true)} · {cityOf(current)}
+              </span>
+              <h3>{current.title}</h3>
             </div>
+            {current.changeTag && <span className="badge badge-changed day-hero-tag">{current.changeTag}</span>}
+          </div>
+          <div className="day-head">
+            <p>
+              {current.area} · {current.summary}
+            </p>
             <div className="day-cost">
               <small>当日人均</small>
               <b>¥{dayCost(current)}</b>
             </div>
           </div>
           <ul className="timeline">
-            {current.activities.map((a) => (
-              <ActivityRow key={a.id} a={a} open={open} />
-            ))}
+            {PERIODS.map((p) => {
+              const acts = current.activities.filter((a) => p.test(a.time));
+              if (!acts.length) return null;
+              return (
+                <li key={p.label} className="period">
+                  <span className="period-label">{p.label}</span>
+                  <ul>
+                    {acts.map((a) => (
+                      <ActivityRow key={a.id} a={a} open={open} />
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
           </ul>
           <button className="expand-btn" onClick={() => setOpen(!open)}>
             {open ? (
@@ -218,9 +271,9 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
           </button>
         </section>
 
-        <section className="card">
+        <section className="card" ref={todoRef}>
           <h4 className="block-title">
-            待办 <span className="muted">{plan.todos.filter((t) => t.done).length}/{plan.todos.length}</span>
+            出发前待办 <span className="muted">{todoDone}/{plan.todos.length}</span>
           </h4>
           <ul className="todos">
             {plan.todos.map((t) => (
@@ -236,7 +289,7 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
           </ul>
         </section>
 
-        <section className="card">
+        <section className="card" ref={followRef}>
           <h4 className="block-title">
             待确认与风险 <span className="muted">{followUps.length}</span>
           </h4>

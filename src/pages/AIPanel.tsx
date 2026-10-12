@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, ChevronUp, FolderHeart, LoaderCircle, Minus, Plus, RefreshCw, ShieldAlert, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  CircleHelp,
+  FolderHeart,
+  LoaderCircle,
+  Minus,
+  Plus,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react';
 import { MockNote, Sheet } from '../components/ui';
 import {
   DEFAULT_PARAMS,
@@ -15,6 +29,7 @@ import {
   type Insight,
   type InsightLevel,
   type PlanParams,
+  type Understanding,
 } from '../logic/planner';
 import { nowStamp, useStore } from '../store';
 import type { CollectionItem } from '../types';
@@ -26,6 +41,16 @@ const QUICK: { id: Quick; label: string; desc: string }[] = [
   { id: 'full', label: '综合旅行攻略', desc: '路线 + 住宿 + 美食' },
   { id: 'budget', label: '整理路线与预算', desc: '按天拆分花费' },
   { id: 'pitfall', label: '检查收藏中的避坑信息', desc: '不生成计划' },
+];
+
+type GroupKey = keyof Understanding;
+const GROUPS: { key: GroupKey; label: string }[] = [
+  { key: 'spots', label: '景点' },
+  { key: 'stays', label: '住宿' },
+  { key: 'foods', label: '美食' },
+  { key: 'routes', label: '路线建议' },
+  { key: 'risks', label: '风险提示' },
+  { key: 'gaps', label: '信息不足' },
 ];
 
 const LEVEL_TAG: Record<InsightLevel, string> = { multi: '多篇提及', single: '单篇提及', insufficient: '信息不足' };
@@ -64,36 +89,39 @@ function Sources({ ids, items }: { ids: string[]; items: CollectionItem[] }) {
   );
 }
 
-function InsightGroup({ title, list, items }: { title: string; list: Insight[]; items: CollectionItem[] }) {
+function InsightRow({ i, items }: { i: Insight; items: CollectionItem[] }) {
+  return (
+    <li className={`ins-row ins-${i.level}`}>
+      <div className="ins-main">
+        <b>{i.label}</b>
+        <span className={`ins-tag ins-tag-${i.level}`}>
+          {LEVEL_TAG[i.level]}
+          {i.level === 'multi' && ` · ${i.sourceIds.length} 篇`}
+        </span>
+      </div>
+      {i.reason && <p className="ins-reason">{i.reason}</p>}
+      <Sources ids={i.sourceIds} items={items} />
+    </li>
+  );
+}
+
+function InsightList({ list, items }: { list: Insight[]; items: CollectionItem[] }) {
   const [all, setAll] = useState(false);
-  if (!list.length) return null;
+  if (!list.length) return <p className="muted tiny ins-empty">这一类暂未在收藏中识别到内容</p>;
   const shown = all ? list : list.slice(0, GROUP_LIMIT);
   return (
-    <div className="insight">
-      <h5>
-        {title} <span className="muted">{list.length}</span>
-      </h5>
+    <>
       <ul className="ins-list">
         {shown.map((i) => (
-          <li key={i.label} className={`ins-row ins-${i.level}`}>
-            <div className="ins-main">
-              <b>{i.label}</b>
-              <span className={`ins-tag ins-tag-${i.level}`}>
-                {LEVEL_TAG[i.level]}
-                {i.level === 'multi' && ` · ${i.sourceIds.length} 篇`}
-              </span>
-            </div>
-            {i.reason && <p className="ins-reason">{i.reason}</p>}
-            <Sources ids={i.sourceIds} items={items} />
-          </li>
+          <InsightRow key={i.label} i={i} items={items} />
         ))}
       </ul>
       {list.length > GROUP_LIMIT && (
         <button className="ins-more" onClick={() => setAll(!all)}>
-          {all ? '收起' : `查看全部 ${list.length} 项`} {all ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          {all ? '收起' : `展开其余 ${list.length - GROUP_LIMIT} 项`} {all ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
         </button>
       )}
-    </div>
+    </>
   );
 }
 
@@ -107,6 +135,7 @@ export function AIPanel() {
   const [quick, setQuick] = useState<Quick>('full');
   const [stage, setStage] = useState(-1);
   const [confirming, setConfirming] = useState(false);
+  const [tab, setTab] = useState<GroupKey>('spots');
   const parsed = useMemo(() => parseRequest(params.request), [params.request]);
   const close = () => stage < 0 && dispatch({ type: 'overlay', overlay: null });
 
@@ -150,6 +179,7 @@ export function AIPanel() {
 
   const groups = [u.spots, u.stays, u.foods, u.routes, u.risks].flat();
   const count = (lv: InsightLevel) => groups.filter((g) => g.level === lv).length + (lv === 'insufficient' ? u.gaps.length : 0);
+  const commentCount = collection.items.filter((i) => i.type === 'comment').length;
 
   const existing = plan
     ? (() => {
@@ -161,7 +191,7 @@ export function AIPanel() {
           todoDone: plan.todos.filter((t) => t.done).length,
           todoTotal: plan.todos.length,
           changes: plan.changes.length,
-          comments: collection.items.filter((i) => i.type === 'comment').length,
+          comments: commentCount,
         };
       })()
     : null;
@@ -170,7 +200,7 @@ export function AIPanel() {
   return (
     <Sheet
       full
-      title="你想用这些收藏完成什么？"
+      title="问问 AI"
       onClose={close}
       footer={
         generating ? null : quick === 'pitfall' ? (
@@ -193,16 +223,9 @@ export function AIPanel() {
         )
       }
     >
-      <div className="ctx-card">
-        <FolderHeart size={20} className="brand" />
-        <div>
-          <strong>已关联收藏夹「{collection.name}」</strong>
-          <small>本次分析 {collection.items.length} 篇收藏（含评论补充），它们将作为本次任务的参考材料</small>
-        </div>
-      </div>
-
       {plan && existing && !generating && (
         <div className="existing-plan">
+          <CalendarDays size={18} className="brand" />
           <div>
             <strong>
               已有计划「{plan.name}」· v{plan.version}
@@ -210,10 +233,8 @@ export function AIPanel() {
             <small>
               {startStr(plan)} 出发 · 已确认 {existing.confirmed} 项 · 待办 {existing.todoDone}/{existing.todoTotal} · 变更记录 {existing.changes} 条
             </small>
+            <p>「继续调整当前计划」会保留以上全部状态；需求变了可以改下方设置后选择「重新生成」，确认前不会改动原计划。</p>
           </div>
-          <p>
-            「继续调整当前计划」会保留以上全部状态；如果需求变了，可以修改下方需求后选择「重新生成」，确认前不会改动原计划。
-          </p>
         </div>
       )}
 
@@ -231,28 +252,75 @@ export function AIPanel() {
         </div>
       ) : (
         <>
-          <section className="block">
-            <h4 className="block-title">AI 对这些收藏的初步理解</h4>
+          {/* 第一层：核心结论 */}
+          <section className="ai-hero insights">
+            <h2>我从你的收藏里发现了什么？</h2>
+            <p className="ai-hero-src">
+              <FolderHeart size={14} />
+              <span>已关联收藏夹「{collection.name}」</span>
+              <em>
+                已分析 {collection.items.length} 篇{commentCount ? `，含 ${commentCount} 条评论补充` : ''}
+              </em>
+            </p>
+            <div className="ai-stats">
+              {GROUPS.slice(0, 3).map((g) => (
+                <button key={g.key} onClick={() => setTab(g.key)}>
+                  <b>{u[g.key].length}</b>
+                  <span>{g.label}</span>
+                </button>
+              ))}
+              <button onClick={() => setTab('risks')}>
+                <b>{u.risks.length}</b>
+                <span>避坑提醒</span>
+              </button>
+            </div>
+            {u.gaps.length > 0 && (
+              <div className="ai-confirm">
+                <h5>
+                  <CircleHelp size={14} /> 还需要你确认 {u.gaps.length} 项
+                </h5>
+                <ul>
+                  {u.gaps.slice(0, 3).map((g) => (
+                    <li key={g.label}>
+                      <b>{g.label}</b>
+                      {g.reason && <p>{g.reason}</p>}
+                      <Sources ids={g.sourceIds} items={collection.items} />
+                    </li>
+                  ))}
+                </ul>
+                {u.gaps.length > 3 && (
+                  <button className="ins-more" onClick={() => setTab('gaps')}>
+                    在「信息不足」中查看全部 <ChevronDown size={12} />
+                  </button>
+                )}
+              </div>
+            )}
             <div className="ins-summary">
               <span className="ins-tag ins-tag-multi">多篇提及 {count('multi')}</span>
               <span className="ins-tag ins-tag-single">单篇提及 {count('single')}</span>
               <span className="ins-tag ins-tag-insufficient">信息不足 / 待确认 {count('insufficient')}</span>
             </div>
-            <p className="muted tiny ins-hint">点击书名号中的收藏可查看原笔记。</p>
-            <div className="insights">
-              <InsightGroup title="已识别的景点" list={u.spots} items={collection.items} />
-              <InsightGroup title="住宿" list={u.stays} items={collection.items} />
-              <InsightGroup title="美食" list={u.foods} items={collection.items} />
-              <InsightGroup title="路线与游玩建议" list={u.routes} items={collection.items} />
-              <InsightGroup title="风险提示" list={u.risks} items={collection.items} />
-              <InsightGroup title="信息不足 / 待确认" list={u.gaps} items={collection.items} />
+          </section>
+
+          {/* 第二层：分类发现 */}
+          <section className="block">
+            <h4 className="block-title">分类发现</h4>
+            <div className="ins-tabs" role="tablist">
+              {GROUPS.map((g) => (
+                <button key={g.key} role="tab" className={`ins-tabbtn${tab === g.key ? ' on' : ''}`} onClick={() => setTab(g.key)}>
+                  {g.label}
+                  <em>{u[g.key].length}</em>
+                </button>
+              ))}
             </div>
-            <p className="muted tiny ins-hint">暂不支持自动识别不同收藏之间的内容冲突。</p>
+            <InsightList key={tab} list={u[tab]} items={collection.items} />
+            <p className="muted tiny ins-hint">点击书名号可查看原笔记 · 暂不支持自动识别不同收藏之间的内容冲突。</p>
             <MockNote kinds={['content', 'rule']} />
           </section>
 
+          {/* 第三层：旅行需求与行动 */}
           <section className="block">
-            <h4 className="block-title">快捷任务</h4>
+            <h4 className="block-title">想用这些收藏做什么？</h4>
             <div className="quick-row">
               {QUICK.map((q) => (
                 <button key={q.id} className={`quick${quick === q.id ? ' quick-on' : ''}`} onClick={() => pickQuick(q.id)}>
@@ -280,29 +348,35 @@ export function AIPanel() {
               <p className="muted tiny">共 {u.risks.length} 条，生成计划时会写入对应日期的注意事项。</p>
             </section>
           ) : (
-            <>
-              <section className="block">
-                <h4 className="block-title">{plan ? '如需重新生成，描述新的需求' : '描述你的需求'}</h4>
-                <textarea
-                  className="req-input"
-                  rows={3}
-                  value={params.request}
-                  onChange={(e) => setRequest(e.target.value)}
-                  placeholder="例如：帮我规划一份云南五日游，预算 3000 元，尽量不走回头路。"
-                />
-                {recognized.length > 0 && (
-                  <p className="recognized">
-                    已从描述中识别：{recognized.map((r) => <span key={r}>{r}</span>)}
-                  </p>
-                )}
-                {parsed.warnings.map((w) => (
-                  <p key={w} className="warn-text">
-                    {w}
-                  </p>
-                ))}
-              </section>
-
-              <section className="block params">
+            <section className="block">
+              <h4 className="block-title">{plan ? '如需重新生成，调整你的旅行需求' : '你的旅行需求'}</h4>
+              <textarea
+                className="req-input"
+                rows={2}
+                value={params.request}
+                onChange={(e) => setRequest(e.target.value)}
+                placeholder="例如：帮我规划一份云南五日游，预算 3000 元，尽量不走回头路。"
+              />
+              {recognized.length > 0 && (
+                <p className="recognized">
+                  已从描述中识别：{recognized.map((r) => <span key={r}>{r}</span>)}
+                </p>
+              )}
+              {parsed.warnings.map((w) => (
+                <p key={w} className="warn-text">
+                  {w}
+                </p>
+              ))}
+              <div className="params">
+                <div className="param">
+                  <label>出发日期</label>
+                  <input
+                    type="date"
+                    className="date-input"
+                    value={params.startDate}
+                    onChange={(e) => e.target.value && setParams({ ...params, startDate: e.target.value })}
+                  />
+                </div>
                 <div className="param">
                   <label>旅行天数</label>
                   <Stepper value={params.days} min={MIN_DAYS} max={MAX_DAYS} step={1} unit="天" onChange={(days) => setParams({ ...params, days })} />
@@ -312,15 +386,6 @@ export function AIPanel() {
                     人均预算<small>不含往返大交通</small>
                   </label>
                   <Stepper value={params.budget} min={1500} max={6000} step={500} unit="元" onChange={(budget) => setParams({ ...params, budget })} />
-                </div>
-                <div className="param">
-                  <label>出发日期</label>
-                  <input
-                    type="date"
-                    className="date-input"
-                    value={params.startDate}
-                    onChange={(e) => e.target.value && setParams({ ...params, startDate: e.target.value })}
-                  />
                 </div>
                 <div className="param">
                   <label>出行人数</label>
@@ -337,14 +402,14 @@ export function AIPanel() {
                           className={`chip${on ? ' chip-on' : ''}`}
                           onClick={() => setParams({ ...params, prefs: on ? params.prefs.filter((x) => x !== p) : [...params.prefs, p] })}
                         >
-                          {p}
+                          {on && <Check size={12} />} {p}
                         </button>
                       );
                     })}
                   </div>
                 </div>
-              </section>
-            </>
+              </div>
+            </section>
           )}
         </>
       )}

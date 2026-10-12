@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ArrowRight, CalendarDays, CircleAlert, Heart, Lock, MessageCircle, RotateCcw, Sparkles } from 'lucide-react';
-import { Cover, MockNote, TopBar } from '../components/ui';
+import { Bookmark, CalendarDays, ChevronRight, CircleAlert, CircleCheck, Heart, Lock, MessageCircle, RotateCcw, Sparkles } from 'lucide-react';
+import { Cover, MockNote, Scene, TopBar } from '../components/ui';
 import { INFO_PRESETS } from '../data/collection';
-import { planStats } from '../logic/planner';
+import { dayDate, fmtDate, planStats } from '../logic/planner';
 import { useStore } from '../store';
 import type { Category } from '../types';
 
@@ -47,41 +47,62 @@ export function CollectionPage() {
           </div>
 
           {plan && stats ? (
-            <button className="plan-status" onClick={() => dispatch({ type: 'nav', view: { name: 'plan' } })}>
-              <CalendarDays size={18} className="brand" />
+            <button className="plan-entry" onClick={() => dispatch({ type: 'nav', view: { name: 'plan' } })}>
+              <span className="plan-entry-thumb">
+                <Scene motif="lake" tone="#3b7dd8" />
+                <CalendarDays size={16} />
+              </span>
               <div>
-                <strong>已有一份{plan.name.replace('我的云南', '')}计划</strong>
+                <strong>{plan.name}</strong>
                 <small>
-                  v{plan.version} · 已确认 {stats.confirmed} 项 · 待确认 {stats.pending} 项
-                  {stats.risk ? ` · 风险 ${stats.risk} 项` : ''}
+                  {fmtDate(dayDate(plan, 1))} 出发 · {plan.days} 天 · v{plan.version}
+                  {stats.pending + stats.risk > 0 ? ` · ${stats.pending + stats.risk} 项待确认` : ' · 已全部确认'}
                 </small>
               </div>
-              <ArrowRight size={16} />
+              <span className="plan-entry-go">
+                查看 <ChevronRight size={14} />
+              </span>
             </button>
           ) : (
-            <div className="plan-status plan-status-empty">
-              <CalendarDays size={18} />
+            <button className="plan-entry plan-entry-empty" onClick={() => dispatch({ type: 'overlay', overlay: { kind: 'ai' } })}>
+              <span className="plan-entry-thumb">
+                <Sparkles size={16} />
+              </span>
               <div>
                 <strong>还没有旅行计划</strong>
-                <small>可以让 AI 基于这 {collection.items.length} 篇收藏生成</small>
+                <small>让 AI 把这 {collection.items.length} 篇收藏整理成可执行的行程</small>
               </div>
-            </div>
+              <ChevronRight size={16} className="muted" />
+            </button>
           )}
 
           {feed.length > 0 && (
             <button className="comment-feed" onClick={() => dispatch({ type: 'overlay', overlay: { kind: 'addInfo' } })}>
-              <MessageCircle size={16} />
+              <span className="comment-avatar">
+                <MessageCircle size={14} />
+              </span>
               <div>
                 <strong>
-                  收藏笔记的评论区有 {feed.length} 条新评论{plan ? '，可能与你的计划有关' : ''}
+                  你收藏的笔记下有 {feed.length} 条新评论{plan ? '，可能和行程有关' : ''}
                 </strong>
-                <small>
-                  “{feed[0].text.slice(0, 20)}…” — 《{collection.items.find((i) => i.id === feed[0].fromNoteId)?.title.slice(0, 10)}…》
+                <small>“{feed[0].text.slice(0, 22)}…”</small>
+                <small className="comment-feed-from">
+                  来自《{collection.items.find((i) => i.id === feed[0].fromNoteId)?.title.slice(0, 14)}…》
                 </small>
               </div>
-              <em>查看</em>
+              <em>去看看</em>
             </button>
           )}
+
+          <button className="ext-entry" onClick={() => dispatch({ type: 'overlay', overlay: { kind: 'addInfo', tab: 'external' } })}>
+            <Bookmark size={13} />
+            <span>
+              刷到<b>其他帖子里的有用评论</b>？可以单独收藏
+            </span>
+            <em>
+              去收藏 <ChevronRight size={13} />
+            </em>
+          </button>
 
           {unchecked.length > 0 && (
             <button
@@ -117,16 +138,19 @@ export function CollectionPage() {
               >
                 <Cover item={item} />
                 <div className="note-body">
-                  <div className="note-tags">
-                    <span className={`cat cat-${item.type}`}>{item.category}</span>
-                    {item.isNew && <span className="cat cat-new">新收藏</span>}
-                    {item.inPlan && <span className="cat cat-plan">已用于计划</span>}
-                  </div>
+                  {item.isNew && (
+                    <div className="note-tags">
+                      <span className="cat cat-new">新收藏</span>
+                    </div>
+                  )}
                   <h3>{item.title}</h3>
                   <p>{item.summary}</p>
                   {item.impact === 'unchecked' && <p className="note-flag">可能影响已有计划，待核实</p>}
                   <div className="note-meta">
-                    <span>{item.author}</span>
+                    <span>
+                      {item.inPlan && <CircleCheck size={11} className="in-plan" aria-label="已用于计划" />}
+                      {item.author}
+                    </span>
                     <span>
                       <Heart size={11} /> {item.likes}
                     </span>

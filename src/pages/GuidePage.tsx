@@ -1,5 +1,5 @@
 import { MockNote, StatusBadge, TopBar } from '../components/ui';
-import { budgetBreakdown, dayCost, understandCollection } from '../logic/planner';
+import { budgetBreakdown, dayCost, dayDate, fmtDate, understandCollection } from '../logic/planner';
 import { useStore } from '../store';
 
 export function GuidePage() {
@@ -19,7 +19,7 @@ export function GuidePage() {
       <div className="scroll doc">
         <h1>{plan.name}</h1>
         <p className="muted">
-          {plan.days} 天 · {plan.people} 人 · 人均预算 ¥{plan.budget} · 参考收藏夹「{collection.name}」{collection.items.length} 篇
+          {fmtDate(dayDate(plan, 1))} – {fmtDate(dayDate(plan, plan.days))} · {plan.days} 天 · {plan.people} 人 · 人均预算 ¥{plan.budget} · 参考收藏夹「{collection.name}」{collection.items.length} 篇
         </p>
         <MockNote kinds={['content', 'rule']} />
 
@@ -27,7 +27,10 @@ export function GuidePage() {
         {plan.dayPlans.map((d) => (
           <div key={d.id} className="doc-day">
             <h3>
-              Day {d.day} · {d.title} <small>人均 ¥{dayCost(d)}</small>
+              <span>
+                Day {d.day} · {fmtDate(dayDate(plan, d.day))} · {d.title}
+              </span>
+              <small>人均 ¥{dayCost(d)}</small>
             </h3>
             <ul>
               {d.activities.map((a) => (

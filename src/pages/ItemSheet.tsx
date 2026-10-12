@@ -6,7 +6,6 @@ export function ItemSheet({ id, peek }: { id: string; peek?: boolean }) {
   const { state, dispatch } = useStore();
   const item = state.collection.items.find((i) => i.id === id);
   if (!item) return null;
-  const from = state.collection.items.find((i) => i.id === item.fromNoteId);
   const close = () => dispatch(peek ? { type: 'peek', id: null } : { type: 'overlay', overlay: null });
   const open = (target: string) => dispatch(peek ? { type: 'peek', id: target } : { type: 'overlay', overlay: { kind: 'item', id: target } });
   const collected = (presetId: string) => state.collection.items.some((i) => i.id === `c-${presetId}`);
@@ -28,7 +27,7 @@ export function ItemSheet({ id, peek }: { id: string; peek?: boolean }) {
         ) : (
           item.body.map((p, i) => <p key={i}>{p}</p>)
         )}
-        {from && <SourceChain item={item} onOpen={open} />}
+        {item.type === 'comment' && <SourceChain item={item} onOpen={open} />}
         <div className="kv">
           {item.places.length > 0 && (
             <span>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Bookmark,
   CalendarClock,
@@ -21,6 +21,7 @@ import { DayPinView, DayPreview } from '../components/diff';
 import { MockNote, SourceChain, TopBar } from '../components/ui';
 import { ALTERNATIVES, REFINEMENTS, analyzeImpact, applyOption, optionLabel, riskSentence, type ImpactResult } from '../logic/impact';
 import { dayDate, fmtDate } from '../logic/planner';
+import { commentOrigin, contextNote, originLabel, type CommentOrigin } from '../logic/source';
 import { nowStamp, useStore } from '../store';
 import type { OptionId } from '../types';
 
@@ -46,6 +47,16 @@ function optionsFor(r: ImpactResult): { id: OptionId; disabled?: boolean; recomm
   ];
 }
 
+function SecHead({ n, title, extra }: { n: number; title: string; extra?: ReactNode }) {
+  return (
+    <div className="sec-head">
+      <i>{n}</i>
+      <b>{title}</b>
+      {extra && <span>{extra}</span>}
+    </div>
+  );
+}
+
 function FlowSteps({ current }: { current: number }) {
   return (
     <ol className="flow">
@@ -63,7 +74,9 @@ export function ImpactPage({ itemId }: { itemId: string }) {
   const { state, dispatch } = useStore();
   const { plan, collection, draft } = state;
   const item = collection.items.find((i) => i.id === itemId);
-  const from = collection.items.find((i) => i.id === item?.fromNoteId);
+  const origin: CommentOrigin = item ? commentOrigin(item, collection.items) : { kind: 'unknown' };
+  const from = item ? contextNote(item, collection.items) : undefined;
+  const sourceLabel = originLabel(origin);
   const text = item?.body[0] ?? '';
   const result = useMemo(() => analyzeImpact(text, plan, from), [text, plan, from]);
   const analyzed = draft?.itemId === itemId && draft.analyzed;
@@ -94,8 +107,8 @@ export function ImpactPage({ itemId }: { itemId: string }) {
 
   const preview = useMemo(() => {
     if (!analyzed || !plan || !item || !draft?.option || !draft.activityId) return null;
-    return applyOption({ plan, item, sourceTitle: from?.title, activityId: draft.activityId, option: draft.option, altId: draft.altId, at: 'preview' });
-  }, [analyzed, plan, item, from, draft]);
+    return applyOption({ plan, item, sourceLabel, activityId: draft.activityId, option: draft.option, altId: draft.altId, at: 'preview' });
+  }, [analyzed, plan, item, sourceLabel, draft]);
 
   if (!item) {
     return (
@@ -121,8 +134,14 @@ export function ImpactPage({ itemId }: { itemId: string }) {
   const conclusion = (() => {
     const a = result.activity;
     if (result.kind === 'none') return { tone: 'none', head: '与当前行程无关', sub: '没有在计划中找到相关的地点或安排，这条评论会保留在收藏夹中。' };
-    if (result.kind === 'ambiguous' && !a)
-      return { tone: 'none', head: '提到了风险，但定位不到具体安排', sub: `评论提到「${result.riskWords.join('」「')}」，但没说是哪里，计划暂不调整。` };
+    if (result.kind === 'ambiguous' && !a) {
+      const deixis = !from && /这家|这里|这个/.test(text) ? '评论里的「这家店」等说法没有可参照的收藏笔记，无法判断指哪里；' : '';
+      return {
+        tone: 'none',
+        head: '暂时无法定位到具体安排',
+        sub: `${deixis}评论提到「${result.riskWords.join('」「')}」，但现有规则对不上计划里的具体地点，计划暂不调整。可以先保留在收藏夹，稍后再确认。`,
+      };
+    }
     if (!a || !result.day) return { tone: 'none', head: '', sub: '' };
     if (result.kind === 'info')
       return {
@@ -158,11 +177,16 @@ export function ImpactPage({ itemId }: { itemId: string }) {
       <FlowSteps current={flowStep} />
       <div className="scroll">
         <section className={`card info-card${analyzed ? ' info-card-compact' : ''}`}>
-          <div className="info-src">
-            <MessageCircle size={14} />
-            <span>来自收藏笔记评论区的新评论</span>
+          <SecHead n={1} title="新信息" extra={<><MessageCircle size={12} /> {origin.kind === 'external_post' ? '来自其他帖子 · 单独收藏' : '来自收藏笔记的评论区'}</>} />
+          <div className="comment-bubble">
+            <span className="comment-avatar">{item.author.replace('评论 · ', '').slice(0, 1)}</span>
+            <div>
+              <small>
+                {item.author.replace('评论 · ', '')} · {item.timeInfo} · {item.likes} 赞
+              </small>
+              <blockquote className="quote">{text}</blockquote>
+            </div>
           </div>
-          <blockquote className="quote">{text}</blockquote>
           <SourceChain item={item} compact={analyzed} />
           {!analyzed && (
             <span className={`info-status info-status-${item.impact}`}>
@@ -184,7 +208,7 @@ export function ImpactPage({ itemId }: { itemId: string }) {
         {plan && !analyzed && !analyzing && (
           <section className="card hint-card">
             <p>
-              评论区常有笔记正文里没有的最新情况。AI 会结合这条评论所在的笔记，找出它对应你行程里的哪一天、哪一项，再给出调整建议。
+              {origin.kind === 'external_post' ? '这条评论来自你没有收藏的帖子，AI 只根据评论内容本身判断，' : '评论区常有笔记正文里没有的最新情况。AI 会结合这条评论所在的笔记，'}找出它对应你行程里的哪一天、哪一项，再给出调整建议。
               <b>确认之前不会修改计划。</b>
             </p>
           </section>
@@ -204,8 +228,18 @@ export function ImpactPage({ itemId }: { itemId: string }) {
         {plan && analyzed && (
           <>
             <section className={`card verdict verdict-${conclusion.tone}`}>
-              <span className="verdict-kicker">规则分析结果</span>
+              <SecHead n={2} title="影响结论" extra="规则分析结果 · 尚未核实" />
               <h3>{conclusion.head}</h3>
+              {result.activity && result.day && result.kind !== 'none' && (
+                <div className="verdict-facts">
+                  <span>
+                    <CalendarClock size={12} /> Day {result.day.day} · {dateOf(result.day.day)}
+                  </span>
+                  <span>
+                    {result.activity.time} {result.activity.title.replace(/^(午餐|晚餐)：/, '')}
+                  </span>
+                </div>
+              )}
               <p>{conclusion.sub}</p>
               {result.activity && result.day && (
                 <DayPinView
@@ -215,7 +249,7 @@ export function ImpactPage({ itemId }: { itemId: string }) {
                   adjacentIds={result.kind === 'info' ? [] : result.adjacent.map((a) => a.id)}
                   mark={result.kind === 'info' ? 'info' : result.kind === 'ambiguous' || t?.within === false ? 'maybe' : 'hit'}
                   comment={text}
-                  noteTitle={from?.title}
+                  sourceLabel={origin.kind === 'collected_note' ? `来自收藏笔记《${origin.note.title}》的评论区` : origin.kind === 'external_post' ? `来自帖子《${origin.post.title}》的评论区（单独收藏）` : undefined}
                 />
               )}
               <button className="basis-toggle" onClick={() => setShowBasis(!showBasis)}>
@@ -277,10 +311,11 @@ export function ImpactPage({ itemId }: { itemId: string }) {
 
             {actionable && (
               <section className="card">
-                <h4 className="block-title">怎么调整？</h4>
+                <SecHead n={3} title="调整建议" extra="选择一种方案，下方实时预览" />
                 <div className="options">
-                  {opts.map((o) => (
+                  {[...opts].sort((a, b) => Number(!!b.recommended) - Number(!!a.recommended)).map((o, idx) => (
                     <div key={o.id}>
+                      {idx === 1 && <p className="opt-divider">其他可选</p>}
                       <button
                         disabled={o.disabled}
                         className={`option${draft?.option === o.id ? ' on' : ''}`}
@@ -344,26 +379,31 @@ export function ImpactPage({ itemId }: { itemId: string }) {
 
             {preview && result.day && (
               <section className="card preview-card">
-                <h4 className="block-title">
-                  更新预览 <span className="muted tiny">确认后才会生效</span>
-                </h4>
+                <SecHead n={4} title="更新前后对比" extra="确认后才会生效" />
                 <DayPreview
                   before={result.day}
                   after={preview.plan.dayPlans.find((d) => d.day === preview.record.day)!}
                   dateLabel={dateOf(preview.record.day)}
                 />
-                <div className="pv-effects">
-                  <span>
-                    <Wallet size={13} /> 预算
+                <div className="pv-grid">
+                  <div className={preview.record.budgetDelta ? 'on' : ''}>
+                    <span>
+                      <Wallet size={12} /> 预算
+                    </span>
                     <b>
                       {preview.record.budgetDelta === 0
                         ? '不变'
                         : `人均 ${preview.record.budgetDelta > 0 ? '+' : '−'}¥${Math.abs(preview.record.budgetDelta)}`}
                     </b>
-                  </span>
-                  <span>
-                    <Route size={13} /> 路线<b>{selectedAlt ? selectedAlt.routeImpact : '不变'}</b>
-                  </span>
+                  </div>
+                  <div className={selectedAlt ? 'on' : ''}>
+                    <span>
+                      <Route size={12} /> 路线
+                    </span>
+                    <b>{selectedAlt ? selectedAlt.routeImpact : '不变'}</b>
+                  </div>
+                </div>
+                <div className="pv-effects">
                   {preview.record.addedTodos.map((td) => (
                     <span key={td}>
                       <ListPlus size={13} /> 新增待办<b>{td}</b>
@@ -406,9 +446,16 @@ export function ImpactPage({ itemId }: { itemId: string }) {
               </button>
             </>
           ) : (
-            <button className="btn btn-primary btn-block" onClick={() => dispatch({ type: 'dismiss', itemId })}>
-              知道了，保留在收藏夹
-            </button>
+            <>
+              {result.kind === 'ambiguous' && (
+                <button className="btn btn-ghost" onClick={back}>
+                  稍后再确认
+                </button>
+              )}
+              <button className="btn btn-primary btn-grow" onClick={() => dispatch({ type: 'dismiss', itemId })}>
+                知道了，保留在收藏夹
+              </button>
+            </>
           )}
         </div>
       )}
