@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, CalendarDays, CircleAlert, Heart, Lock, MessageCircle, RotateCcw, Sparkles } from 'lucide-react';
-import { Cover, TopBar } from '../components/ui';
+import { Cover, MockNote, TopBar } from '../components/ui';
 import { INFO_PRESETS } from '../data/collection';
 import { planStats } from '../logic/planner';
 import { useStore } from '../store';
@@ -38,7 +38,7 @@ export function CollectionPage() {
             <div>
               <h1>{collection.name}</h1>
               <p className="muted">
-                {collection.items.length} 篇收藏 · {collection.desc}
+                {collection.items.length} 篇收藏 · {plan ? `准备中的${plan.name.replace(/^我的/, '')}` : collection.desc}
               </p>
             </div>
             <span className="tag-lock">
@@ -136,7 +136,7 @@ export function CollectionPage() {
             ))}
           </div>
         )}
-        <p className="foot-note">概念 Demo · 收藏内容、作者和数据均为模拟，不代表真实笔记</p>
+        <MockNote kinds={['content']} />
       </div>
 
       <div className="bottom-bar">

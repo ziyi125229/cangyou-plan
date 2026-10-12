@@ -204,7 +204,7 @@ export function ImpactPage({ itemId }: { itemId: string }) {
         {plan && analyzed && (
           <>
             <section className={`card verdict verdict-${conclusion.tone}`}>
-              <span className="verdict-kicker">AI 判断（模拟）</span>
+              <span className="verdict-kicker">规则分析结果</span>
               <h3>{conclusion.head}</h3>
               <p>{conclusion.sub}</p>
               {result.activity && result.day && (
@@ -380,7 +380,7 @@ export function ImpactPage({ itemId }: { itemId: string }) {
                 )}
               </section>
             )}
-            <MockNote />
+            <MockNote kinds={['rule', 'unverified']} />
           </>
         )}
       </div>

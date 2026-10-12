@@ -268,7 +268,7 @@ export function PlanPage({ initialDay }: { initialDay?: number }) {
               <li key={n}>{n}</li>
             ))}
           </ul>
-          <MockNote>演示路线与价格为模拟数据，不代表实时最优路线或营业状态</MockNote>
+          <MockNote kinds={['content', 'rule', 'unverified']} />
         </section>
       </div>
 

@@ -105,15 +105,17 @@ export function Sheet({
   children,
   footer,
   full,
+  peek,
 }: {
   title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   full?: boolean;
+  peek?: boolean;
 }) {
   return (
-    <div className="sheet-mask" onClick={onClose}>
+    <div className={`sheet-mask${peek ? ' sheet-peek' : ''}`} onClick={onClose}>
       <div className={`sheet${full ? ' sheet-full' : ''}`} onClick={(e) => e.stopPropagation()} role="dialog">
         <div className="sheet-head">
           <span className="sheet-grip" />
@@ -163,7 +165,7 @@ export function SourceChips({ ids }: { ids: string[] }) {
 }
 
 /** 信息来源链路：收藏夹 → 收藏的笔记 → 评论区 */
-export function SourceChain({ item, compact }: { item: CollectionItem; compact?: boolean }) {
+export function SourceChain({ item, compact, onOpen }: { item: CollectionItem; compact?: boolean; onOpen?: (id: string) => void }) {
   const { state, dispatch } = useStore();
   const note = state.collection.items.find((i) => i.id === item.fromNoteId);
   return (
@@ -177,7 +179,7 @@ export function SourceChain({ item, compact }: { item: CollectionItem; compact?:
       {note && (
         <li>
           <Bookmark size={13} />
-          <button onClick={() => dispatch({ type: 'overlay', overlay: { kind: 'item', id: note.id } })}>
+          <button onClick={() => (onOpen ? onOpen(note.id) : dispatch({ type: 'overlay', overlay: { kind: 'item', id: note.id } }))}>
             收藏的笔记<b>《{note.title}》</b>
             {!compact && <small>收藏于 {note.savedAt} · 点击查看原笔记</small>}
           </button>
@@ -198,11 +200,27 @@ export function SourceChain({ item, compact }: { item: CollectionItem; compact?:
   );
 }
 
-export function MockNote({ children }: { children?: ReactNode }) {
+export type MockKind = 'content' | 'rule' | 'unverified';
+
+/** 统一的模拟能力边界说明 */
+export const MOCK_LABEL: Record<MockKind, { tag: string; text: string }> = {
+  content: { tag: '演示内容', text: '收藏笔记、评论与价格均为虚构，不来自小红书真实数据' },
+  rule: { tag: '规则分析', text: '基于预设关键词与结构化字段生成，未调用大模型' },
+  unverified: { tag: '待核实', text: '营业、开放、预约等真实状态未经核实，以官方信息为准' },
+};
+
+export function MockNote({ kinds = ['rule'] }: { kinds?: MockKind[] }) {
   return (
-    <div className="mock-note">
+    <div className="mock-note mock-note-list">
       <FlaskConical size={12} />
-      {children ?? '模拟分析结果 · 基于预设规则与演示数据，未调用真实模型'}
+      <div>
+        {kinds.map((k) => (
+          <p key={k}>
+            <b>{MOCK_LABEL[k].tag}</b>
+            {MOCK_LABEL[k].text}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }

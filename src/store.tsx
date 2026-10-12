@@ -25,11 +25,13 @@ export interface State {
   overlay: Overlay;
   toast: Toast | null;
   progress: Progress;
+  /** 叠在其他弹层之上的笔记预览（如 AI 面板中点开来源） */
+  peek: string | null;
 }
 
 const STORAGE_KEY = 'cangyou-demo-v3';
 
-const initialState = (): State => ({
+export const initialState = (): State => ({
   collection: structuredClone(INITIAL_COLLECTION),
   plan: null,
   view: { name: 'collection' },
@@ -37,11 +39,13 @@ const initialState = (): State => ({
   overlay: null,
   toast: null,
   progress: { aiOpened: false, analyzed: false, changelogViewed: false, undone: false },
+  peek: null,
 });
 
 export type Action =
   | { type: 'nav'; view: View }
   | { type: 'overlay'; overlay: Overlay }
+  | { type: 'peek'; id: string | null }
   | { type: 'toast'; text: string; tone?: Toast['tone'] }
   | { type: 'clearToast'; id: number }
   | { type: 'generate'; params: PlanParams; at: string }
@@ -66,13 +70,15 @@ const setItem = (c: Collection, id: string, patch: Partial<CollectionItem>): Col
   items: c.items.map((i) => (i.id === id ? { ...i, ...patch } : i)),
 });
 
-function reducer(s: State, a: Action): State {
+export function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'nav': {
       const progress = { ...s.progress };
       if (a.view.name === 'changelog') progress.changelogViewed = true;
-      return { ...s, view: a.view, overlay: null, progress };
+      return { ...s, view: a.view, overlay: null, peek: null, progress };
     }
+    case 'peek':
+      return { ...s, peek: a.id };
     case 'overlay':
       return {
         ...s,
@@ -84,6 +90,8 @@ function reducer(s: State, a: Action): State {
     case 'clearToast':
       return s.toast?.id === a.id ? { ...s, toast: null } : s;
     case 'generate': {
+      // 新计划不继承旧计划的变更记录、手动确认与待办进度；收藏内容全部保留，状态按新计划重新计算
+      const regenerated = !!s.plan;
       const plan = generatePlan(a.params, a.at);
       const used = new Set(plan.dayPlans.flatMap((d) => d.activities.flatMap((x) => x.sourceIds)));
       const collection: Collection = {
@@ -92,12 +100,12 @@ function reducer(s: State, a: Action): State {
         items: s.collection.items.map((i) => ({
           ...i,
           inPlan: used.has(i.id),
-          impact: i.impact === 'none' ? 'none' : 'unchecked',
+          impact: i.type === 'comment' && !used.has(i.id) ? 'unchecked' : 'none',
         })),
       };
       return withToast(
-        { ...s, plan, collection, draft: null, overlay: null, view: { name: 'plan', day: 1 } },
-        `已基于 ${s.collection.items.length} 篇收藏生成计划`,
+        { ...s, plan, collection, draft: null, overlay: null, peek: null, view: { name: 'plan', day: 1 } },
+        regenerated ? `已重新生成计划，收藏夹 ${s.collection.items.length} 篇收藏均已保留` : `已基于 ${s.collection.items.length} 篇收藏生成计划`,
       );
     }
     case 'toggleTodo': {
@@ -110,7 +118,9 @@ function reducer(s: State, a: Action): State {
         ...s.plan,
         dayPlans: s.plan.dayPlans.map((d) => ({
           ...d,
-          activities: d.activities.map((x) => (x.id === a.id ? { ...x, status: 'confirmed' as const, statusNote: undefined } : x)),
+          activities: d.activities.map((x) =>
+            x.id === a.id ? { ...x, status: 'confirmed' as const, statusNote: undefined, userConfirmed: true } : x,
+          ),
         })),
       };
       return withToast({ ...s, plan }, '已标记为已确认');
@@ -147,7 +157,7 @@ function reducer(s: State, a: Action): State {
         items: [item, ...s.collection.items.map((i) => ({ ...i, isNew: false }))],
       };
       const view: View = a.goImpact && s.plan ? { name: 'impact', itemId: id } : s.view;
-      return withToast({ ...s, collection, overlay: null, view }, `已收藏到「${s.collection.name}」`);
+      return withToast({ ...s, collection, overlay: null, peek: null, view }, `已收藏到「${s.collection.name}」`);
     }
     case 'draft': {
       const base: Draft = s.draft ?? { itemId: '', analyzed: false, option: null, altId: null, activityId: null };
@@ -187,12 +197,22 @@ function reducer(s: State, a: Action): State {
   }
 }
 
+/** 旧版本按固定 Day 编号命名安排（如 d2-photo），按原参数重建计划，收藏内容保持不变 */
+export function migrate(state: State): State {
+  const p = state.plan;
+  if (!p || !p.dayPlans.some((d) => d.activities.some((x) => /^d[1-5x]-/.test(x.id)))) return state;
+  const params: PlanParams = { days: p.days, budget: p.budget, people: p.people, startDate: p.startDate, prefs: p.prefs, request: p.request };
+  const next = reducer(state, { type: 'generate', params, at: p.createdAt });
+  return { ...next, view: { name: 'plan' }, toast: null };
+}
+
 function load(): State {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialState();
     const saved = JSON.parse(raw) as Partial<State>;
-    return { ...initialState(), ...saved, overlay: null, toast: null };
+    const state: State = { ...initialState(), ...saved, overlay: null, toast: null, peek: null };
+    return migrate(state);
   } catch {
     return initialState();
   }

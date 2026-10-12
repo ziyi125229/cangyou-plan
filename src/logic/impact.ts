@@ -20,7 +20,7 @@ export interface Alternative {
 
 /** 预置替代方案（演示数据，非实时地理计算） */
 export const ALTERNATIVES: Record<string, Alternative[]> = {
-  'd1-dinner': [
+  'arrive-dinner': [
     {
       id: 'erhai-home',
       title: '晚餐：洱海人家白族菜',
@@ -51,7 +51,7 @@ export const ALTERNATIVES: Record<string, Alternative[]> = {
       adjust: [],
     },
   ],
-  'd2-photo': [
+  'erhai-photo': [
     {
       id: 'caicun',
       title: '才村码头 · 洱海边拍照',
@@ -67,8 +67,8 @@ export const ALTERNATIVES: Record<string, Alternative[]> = {
       tradeoff: '没有白墙背景，画面偏自然水景',
       routeImpact: '路线顺序不变，往喜洲方向多约 20 分钟车程',
       adjust: [
-        { id: 'd2-car', time: '09:00', note: '出发推迟 30 分钟' },
-        { id: 'd2-lunch', time: '12:00', note: '午餐推迟 20 分钟' },
+        { id: 'erhai-car', time: '09:00', note: '出发推迟 30 分钟' },
+        { id: 'erhai-lunch', time: '12:00', note: '午餐推迟 20 分钟' },
       ],
     },
     {
@@ -82,8 +82,8 @@ export const ALTERNATIVES: Record<string, Alternative[]> = {
       tradeoff: '画面受季节影响较大',
       routeImpact: '直接前往喜洲，路线更短',
       adjust: [
-        { id: 'd2-car', time: '09:00', note: '出发推迟 30 分钟' },
-        { id: 'd2-xizhou', title: '喜洲古镇 · 严家大院', note: '麦田已提前到上午，下午只逛古镇' },
+        { id: 'erhai-car', time: '09:00', note: '出发推迟 30 分钟' },
+        { id: 'erhai-xizhou', title: '喜洲古镇 · 严家大院', note: '麦田已提前到上午，下午只逛古镇' },
       ],
     },
   ],
@@ -179,11 +179,14 @@ export function riskSentence(kind: ActKind) {
 }
 
 /** 补充建议型评论：按评论内容细化原安排（预置规则） */
-export const REFINEMENTS: Record<string, { label: string; desc: string; title: string; detail: string; statusNote?: string; todo: string }> = {
-  'd4-stay': {
+export const REFINEMENTS: Record<
+  string,
+  { label: string; desc: string; title: (orig: string) => string; detail: string; statusNote?: string; todo: string }
+> = {
+  'lijiang-stay': {
     label: '按评论调整订房要求',
     desc: '把「避开酒吧街」写进住宿安排，并生成订房待办',
-    title: '入住丽江古城外围客栈（避开酒吧街一带）',
+    title: (orig) => orig.replace('外围客栈', '外围客栈·避开酒吧街一带'),
     detail: '评论区提醒酒吧街夜间很吵；选北侧或西侧外围，步行 10 分钟进古城（演示数据）。',
     statusNote: '具体客栈尚未选定 · 订房时避开酒吧街附近',
     todo: '预订丽江客栈：古城外围、远离酒吧街',
@@ -293,7 +296,7 @@ export function applyOption({ plan, item, sourceTitle, activityId, option, altId
     const r = REFINEMENTS[activityId];
     if (r) {
       Object.assign(target, {
-        title: r.title,
+        title: r.title(short),
         detail: r.detail,
         statusNote: r.statusNote ?? target.statusNote,
         tip: comment,

@@ -21,7 +21,7 @@ export function GuidePage() {
         <p className="muted">
           {plan.days} 天 · {plan.people} 人 · 人均预算 ¥{plan.budget} · 参考收藏夹「{collection.name}」{collection.items.length} 篇
         </p>
-        <MockNote>由演示规则基于收藏内容整理，非真实模型输出</MockNote>
+        <MockNote kinds={['content', 'rule']} />
 
         <h2>一、行程安排</h2>
         {plan.dayPlans.map((d) => (

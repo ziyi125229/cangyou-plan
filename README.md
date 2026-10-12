@@ -9,6 +9,7 @@
 ```bash
 npm install
 npm run dev
+npm test        # 行程一致性、日期、预算、待办与状态逻辑的单元测试
 ```
 
 ## 演示路径

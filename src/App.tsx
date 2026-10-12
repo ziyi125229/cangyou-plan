@@ -30,11 +30,15 @@ function Screen() {
 }
 
 function Overlays() {
-  const { overlay } = useStore().state;
-  if (!overlay) return null;
-  if (overlay.kind === 'ai') return <AIPanel />;
-  if (overlay.kind === 'addInfo') return <AddInfoSheet />;
-  return <ItemSheet key={overlay.id} id={overlay.id} />;
+  const { overlay, peek } = useStore().state;
+  return (
+    <>
+      {overlay?.kind === 'ai' && <AIPanel />}
+      {overlay?.kind === 'addInfo' && <AddInfoSheet />}
+      {overlay?.kind === 'item' && <ItemSheet key={overlay.id} id={overlay.id} />}
+      {peek && <ItemSheet key={`peek-${peek}`} id={peek} peek />}
+    </>
+  );
 }
 
 export default function App() {

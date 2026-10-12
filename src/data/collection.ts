@@ -345,7 +345,7 @@ export const INFO_PRESETS: InfoPreset[] = [
 export const INITIAL_COLLECTION: Collection = {
   id: 'col-yunnan',
   name: '云南旅行',
-  desc: '准备中的云南五日游',
+  desc: '准备中的云南旅行',
   items: INITIAL_ITEMS,
   planId: null,
 };

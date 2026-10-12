@@ -9,7 +9,7 @@ export function DemoGuide() {
   const steps = [
     { label: '打开「云南旅行」收藏夹，浏览收藏内容', done: true },
     { label: '点底部「问问 AI」，查看 AI 对收藏的理解', done: progress.aiOpened },
-    { label: '设置参数，生成云南五日游计划', done: !!plan },
+    { label: '设置参数，生成云南旅行计划', done: !!plan },
     { label: '从收藏笔记的评论区，加入「这家店在装修」评论', done: commentAdded },
     { label: '点「检查对行程的影响」，看评论钉在哪一天的哪项安排', done: progress.analyzed },
     { label: '选择调整方式，在同页预览更新后的行程并确认', done: applied },

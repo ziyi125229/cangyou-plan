@@ -72,6 +72,8 @@ export interface Activity {
   aliases?: { strong: string[]; weak?: string[] };
   changed?: boolean;
   changeNote?: string;
+  /** 用户手动标记为已确认 */
+  userConfirmed?: boolean;
   /** 引发本次变更的评论 */
   changeSource?: { itemId: string; text: string };
 }

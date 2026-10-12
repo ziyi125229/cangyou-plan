@@ -2,16 +2,17 @@ import { Bookmark, BookmarkCheck, CircleAlert, Clock, Heart, MapPin } from 'luci
 import { Cover, Sheet, SourceChain } from '../components/ui';
 import { useStore, nowStamp } from '../store';
 
-export function ItemSheet({ id }: { id: string }) {
+export function ItemSheet({ id, peek }: { id: string; peek?: boolean }) {
   const { state, dispatch } = useStore();
   const item = state.collection.items.find((i) => i.id === id);
   if (!item) return null;
   const from = state.collection.items.find((i) => i.id === item.fromNoteId);
-  const close = () => dispatch({ type: 'overlay', overlay: null });
+  const close = () => dispatch(peek ? { type: 'peek', id: null } : { type: 'overlay', overlay: null });
+  const open = (target: string) => dispatch(peek ? { type: 'peek', id: target } : { type: 'overlay', overlay: { kind: 'item', id: target } });
   const collected = (presetId: string) => state.collection.items.some((i) => i.id === `c-${presetId}`);
 
   return (
-    <Sheet title={item.type === 'comment' ? '评论补充' : '笔记预览'} onClose={close} full>
+    <Sheet title={item.type === 'comment' ? '评论补充' : '笔记预览'} onClose={close} full peek={peek}>
       <div className="item-detail">
         {item.type !== 'comment' && <Cover item={item} />}
         <h2>{item.title}</h2>
@@ -27,7 +28,7 @@ export function ItemSheet({ id }: { id: string }) {
         ) : (
           item.body.map((p, i) => <p key={i}>{p}</p>)
         )}
-        {from && <SourceChain item={item} />}
+        {from && <SourceChain item={item} onOpen={open} />}
         <div className="kv">
           {item.places.length > 0 && (
             <span>
